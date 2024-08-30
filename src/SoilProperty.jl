@@ -151,8 +151,8 @@ end
 """
 Ice impedance of the soil layers.
 """
-function f_impedance(profile::SoilProfile, vwc, f_ice)
-  return 10 .^ (-6 .* ((vwc .* f_ice) ./ theta_sat(profile)))
+function f_impedance(soil::SoilProfile, θ, f_ice)
+  return @. 10 ^ (-6 * ((θ * f_ice) / soil.θ_sat)) # CLM5, 2.7.48
 end
 
 """
@@ -216,17 +216,17 @@ hydraulic conductivity.
 # Parameters
 - `vwc::Array{Float64, 2}`: (Z x 1) array of soil volumetric water content (VWC)
 - `temp_k::Array{Float64, 2}`: (Z x 1) array of soil temperatures in degrees K
-- `f_saturated::Array{Float64, 2}`: (Z x 1) array of the fraction of the land surface that is saturated
+- `f_sat::Array{Float64, 2}`: (Z x 1) array of the fraction of the land surface that is saturated
 - `f_ice::Union{Array{Float64, 2}, Nothing}`: (Optional) (Z x 1) array of the ice fraction; will be calculated based on VWC and temperature if None
 
 # Returns
 - `Array{Float64, 1}`: The maximum infiltration capacity (kg m-2 s-1); array of shape (N,)
 """
-function max_infiltration(profile::SoilProfile, vwc, temp_k, f_saturated, f_ice=nothing)
+function max_infiltration(soil::SoilProfile, θ, temp_k, f_sat, f_ice=nothing)
   if f_ice === nothing
-    f_ice = profile.f_ice(vwc, temp_k)
+    f_ice = f_ice(soil, θ, temp_k)
   end
-  impedance_i = profile.f_impedance(vwc, f_ice)
-  return (1 .- f_saturated) .* impedance_i[1] .* profile._ksat[1]
+  
+  Θ_ice = f_impedance(soil, θ, f_ice)
+  return (1 .- f_sat) .* Θ_ice[1] .* soil.Ksat[1]
 end
-

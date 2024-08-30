@@ -32,7 +32,7 @@ Runs the soil water infiltration model forward in time for a certain
 number of days.
 
 # Parameters
-- `vwc::Array{Float64, 2}`: (Z x 1) array of the initial soil volumetric water content (VWC) profile
+- `θ::Array{Float64, 2}`: (Z x 1) array of the initial soil volumetric water content (θ) profile
 - `temp_profile::Array{Float64, 2}`: (Z x 1) array of soil temperatures in degrees K for the current time step
 - `transpiration::Union{Array{Float64, 1}, Nothing}`: Sequence of the total daily potential (unconstrained) transpiration rate (kg m-2 s-1)
 - `influx::Array{Float64, 1}`: Sequence of the daily water infiltration rate at the surface layer, in units of (kg m-2 s-1) or (mm s-1)
@@ -45,14 +45,14 @@ number of days.
 - `adaptive::Bool`: True to use adaptive time stepping: dynamic adjustment of the sub-daily time step based on the error in water balance (Default: True)
 
 # Returns
-- `Tuple{Array{Float64, 2}, Array{Float64, 2}, Union{Array{Float64, 2}, Nothing}}`: 3-tuple of `(vwc, err, psi)` where `vwc` is the soil moisture time series, a (Z x T) array; `err` is the estimated truncation error, a (Z x T) array; `psi` is the estimated soil matric potential, a (Z x T) array, where T is time and Z is the number of layers.
+- `Tuple{Array{Float64, 2}, Array{Float64, 2}, Union{Array{Float64, 2}, Nothing}}`: 3-tuple of `(θ, err, psi)` where `θ` is the soil moisture time series, a (Z x T) array; `err` is the estimated truncation error, a (Z x T) array; `psi` is the estimated soil matric potential, a (Z x T) array, where T is time and Z is the number of layers.
 """
-function run(model::InfiltrationModel, vwc, temp_profile, transpiration, influx, f_saturated, dt, n_days::Union{Int,Nothing}=nothing, ltol::Float64=1e-2, utol::Float64=1e-1, climatology::Bool=false, adaptive::Bool=true)
+function run(model::InfiltrationModel, θ, temp_profile, transpiration, influx, f_saturated, dt, n_days::Union{Int,Nothing}=nothing, ltol::Float64=1e-2, utol::Float64=1e-1, climatology::Bool=false, adaptive::Bool=true)
   if n_days === nothing
     n_days = size(influx, 1)
   end
 
-  est_vwc = fill(NaN, model.soil.nlayer, n_days)
+  est_θ = fill(NaN, model.soil.nlayer, n_days)
   est_error = fill(NaN, model.soil.nlayer, n_days)
   est_psi = nothing
 
@@ -68,19 +68,21 @@ function run(model::InfiltrationModel, vwc, temp_profile, transpiration, influx,
     iterations = iterations .% 365
   end
 
+  
+
   for (i, d) in enumerate(iterations)
     successful = false
     while !successful && (model.dt_min <= dt < SECS_PER_DAY ÷ 2)
       _trans = transpiration === nothing ? nothing : transpiration[d]
-      args = (vwc, temp_profile[:, d], _trans, influx[d], f_saturated[d], dt)
+      args = (θ, temp_profile[:, d], _trans, influx[d], f_saturated[d], dt)
       if model.debug
-        vwc, de = step_daily(model, args...)
+        θ, de = step_daily(model, args...)
       else
         try
-          vwc, de = step_daily(model, args...)
+          θ, de = step_daily(model, args...)
         catch
           println("ERROR: Ending prematurely due to error in InfiltrationModel.step_daily()")
-          return (est_vwc, est_error, est_psi)
+          return (est_θ, est_error, est_psi)
         end
       end
       
@@ -97,22 +99,22 @@ function run(model::InfiltrationModel, vwc, temp_profile, transpiration, influx,
         dt = Int(dt * d_dt)
       end
     end
-    est_vwc[:, i] = vwc[:]
+    est_θ[:, i] = θ[:]
     est_error[:, i] = mean(hcat(de...), dims=1)[:]
     if model.debug
-      f_ice = model.soil.f_ice(vwc, temp_profile[:, d])
-      psi = model.soil.matric_potential(vwc, f_ice)
+      f_ice = model.soil.f_ice(θ, temp_profile[:, d])
+      psi = model.soil.matric_potential(θ, f_ice)
       est_psi[:, i] = psi[:]
     end
   end
-  return (est_vwc, est_error, est_psi)
+  return (est_θ, est_error, est_psi)
 end
 
 """
 Executes a single daily time step of the soil water infiltration model.
 
 # Parameters
-- `vwc::Array{Float64, 2}`: (Z x 1) array of the initial soil volumetric water content (VWC) profile
+- `θ::Array{Float64, 2}`: (Z x 1) array of the initial soil volumetric water content (θ) profile
 - `temp_profile::Array{Float64, 2}`: (Z x 1) array of soil temperatures in degrees K for the current time step
 - `transpiration::Float64`: Total potential (unconstrained) transpiration rate (kg m-2 s-1), a daily scalar value
 - `influx::Float64`: Scalar or N-dimensional array of water infiltration at the surface layer, in units of (kg m-2 s-1) or (mm s-1)
@@ -120,18 +122,18 @@ Executes a single daily time step of the soil water infiltration model.
 - `dt::Int`: Size of time step (secs)
 
 # Returns
-- `Tuple{Array{Float64, 2}, Array{Float64, 1}}`: 2-tuple of `(vwc, error)` where `vwc` is the updated soil moisture profile and `error` is the estimated truncation error.
+- `Tuple{Array{Float64, 2}, Array{Float64, 1}}`: 2-tuple of `(θ, error)` where `θ` is the updated soil moisture profile and `error` is the estimated truncation error.
 """
-function step_daily(model::InfiltrationModel, vwc, temp_profile, transpiration, influx, f_saturated, dt)
+function step_daily(model::InfiltrationModel, θ, temp_profile, transpiration, influx, f_saturated, dt)
 
-  function rebalance(vwc, temp_k, thickness_mm)
+  function rebalance(θ, temp_k, thickness_mm)
     if all(temp_k .> 276)
-      f_ice = zeros(size(vwc))
+      f_ice = zeros(size(θ))
     else
-      f_ice = model.soil.f_ice(vwc, temp_k)
+      f_ice = model.soil.f_ice(θ, temp_k)
     end
-    wliq = (vwc .- (vwc .* f_ice)) .* -thickness_mm
-    wliq_max = (model.soil._theta_sat .- (vwc .* f_ice)) .* -thickness_mm
+    wliq = (θ .- (θ .* f_ice)) .* -thickness_mm
+    wliq_max = (model.soil._theta_sat .- (θ .* f_ice)) .* -thickness_mm
     i = 0
     while !all((0.01 .<= wliq .<= wliq_max) .| (wliq_max .< 0.01))
       @assert i < 1000
@@ -143,8 +145,8 @@ function step_daily(model::InfiltrationModel, vwc, temp_profile, transpiration, 
       wliq .+= deficit .- vcat(0, deficit[1:end-1])
       i += 1
     end
-    vwc = (wliq ./ -thickness_mm) .+ (vwc .* f_ice)
-    return vwc
+    θ = (wliq ./ -thickness_mm) .+ (θ .* f_ice)
+    return θ
   end
 
   de = []
@@ -153,23 +155,24 @@ function step_daily(model::InfiltrationModel, vwc, temp_profile, transpiration, 
   if model.debug
     @assert !haskey(transpiration, :length)
   end
+
   for t in iterations
-    @assert all(0 .<= vwc .<= 1)
-    actual_trans = zeros(size(vwc))
+    @assert all(0 .<= θ .<= 1)
+    actual_trans = zeros(size(θ))
     if transpiration !== nothing
-      actual_trans, _, _ = model.soil.solve_sink(vwc, transpiration)
+      actual_trans = model.soil.solve_sink(θ, transpiration)
     end
-    max_influx = model.soil.max_infiltration(vwc, temp_profile, f_saturated)
-    x, flows, runoff = model.soil.solve_vwc(min(influx, max_influx[1]), vwc, temp_profile, dt, actual_trans)
+    max_influx = model.soil.max_infiltration(θ, temp_profile, f_saturated)
+    x, flows, runoff = model.soil.solve_θ(min(influx, max_influx[1]), θ, temp_profile, dt, actual_trans)
     q_in, q_out = flows
-    vwc .+= x
-    vwc .+= runoff
-    vwc = rebalance(vwc, temp_profile, thickness_mm)
+    θ .+= x
+    θ .+= runoff
+    θ = rebalance(θ, temp_profile, thickness_mm)
     if t > 1
       err = (dt / 2) * (((x .* thickness_mm) ./ dt) .- (q_in0 .- q_out0 .- actual_trans))
       push!(de, err)
     end
     q_in0, q_out0 = q_in, q_out
   end
-  return (vwc, de)
+  return (θ, de)
 end
