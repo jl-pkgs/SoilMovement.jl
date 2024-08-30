@@ -36,33 +36,33 @@ NOTES:
 """
 @with_kw mutable struct SoilProfile{FT<:Real}
   pft::Int = 1
-  n_layers::Int = 10
+  nlayer::Int = 10
 
   "Depths of each soil layer's bottom interface, in meters; with negative values below the surface"
-  depths_m::Vector{FT} = zeros(n_layers)
-
-  "Areal soil organic carbon (SOC) content (g C m-2) in each layer"
-  soc::Vector{FT} = zeros(n_layers)
-  sand::Vector{FT} = zeros(n_layers)
-  clay::Vector{FT} = zeros(n_layers)
-  porosity::Vector{FT} = zeros(n_layers)
+  depths_m::Vector{FT} = zeros(nlayer)
+  "in mm"
+  thickness_mm::Vector{FT} = depth2Δz(depths_m) .* 1e3 #
+  z::Vector{FT} = -abs.(depths_m) .* 1e3
+  z_node::Vector{FT} = (depths_m .* 1e3) .- thickness_mm ./ 2
+  # zeros::Vector{FT} = zeros(nlayer)
 
   "Depth to bedrock (m); not currently used"
   bedrock::Float64 = NaN
+  z_bedrock::Float64 = -abs(bedrock) .* 1e3
+
   "Topographic slope (degrees)"
   slope::Float64 = NaN
 
+  "Areal soil organic carbon (SOC) content (g C m-2) in each layer"
+  soc::Vector{FT} = zeros(nlayer)
+  sand::Vector{FT} = zeros(nlayer)
+  clay::Vector{FT} = zeros(nlayer)
+  porosity::Vector{FT} = zeros(nlayer)
+
   frac_clay::Vector{FT} = clay
   frac_sand::Vector{FT} = sand
-  frac_organic::Vector{FT} = zeros(n_layers)
+  frac_organic::Vector{FT} = zeros(nlayer)
   
-  "in mm"
-  thickness_mm::Vector{FT} = zeros(n_layers)
-  
-  z::Vector{FT} = depth2z(depths_m) .* 1e3
-  z_bedrock::Float64 = -abs(bedrock) .* 1e3
-  z_node::Vector{FT} = zeros(n_layers)
-  # zeros::Vector{FT} = zeros(n_layers)
   params::Dict{Symbol,Float64} = Dict(:ksat_om => 1e-1, :alpha => 3)
 end
 
@@ -78,15 +78,15 @@ function SoilProfile(
   frac_organic = (soc ./ abs.(depths_m)) ./ SOCC_MAX
   @assert maximum(frac_organic) < 1 "Organic fraction > 1.0; check units of soil organic carbon"
 
-  thickness_mm = FT(depths_m .- vcat(0.0, depths_m[1:end-1])) .* 1e3
+  # thickness_mm = FT(depths_m .- vcat(0.0, depths_m[1:end-1])) .* 1e3
+  # z = -abs.(depths_m) .* 1e3
+  # z_node = (depths_m .* 1e3) .- thickness_mm ./ 2 # not negative
+  nlayer = length(depths_m)
 
-  z_node = (depths_m .* 1e3) .- thickness_mm ./ 2 # not negative
-  n_layers = length(depths_m)
-
-  return SoilProfile{FT}(;pft, soc, sand, clay, porosity, bedrock, slope, depths_m, frac_clay, frac_organic, frac_sand, thickness_mm, z, z_bedrock, z_node, n_layers, params)
+  return SoilProfile{FT}(;pft, soc, sand, clay, porosity, bedrock, slope, depths_m, frac_clay, frac_organic, frac_sand, thickness_mm, z, z_bedrock, z_node, nlayer, params)
 end
 
-depth2z(depth::Vector{FT}) where {FT<:Real} = FT(depth .- vcat(FT(0.0), depth[1:end-1]))
+depth2Δz(depth::Vector{FT}) where {FT<:Real} = depth .- vcat(FT(0.0), depth[1:end-1])
 
 
 export SoilProfile

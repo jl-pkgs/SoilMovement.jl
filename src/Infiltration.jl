@@ -52,12 +52,12 @@ function run(model::InfiltrationModel, vwc, temp_profile, transpiration, influx,
     n_days = size(influx, 1)
   end
 
-  est_vwc = fill(NaN, model.soil.n_layers, n_days)
-  est_error = fill(NaN, model.soil.n_layers, n_days)
+  est_vwc = fill(NaN, model.soil.nlayer, n_days)
+  est_error = fill(NaN, model.soil.nlayer, n_days)
   est_psi = nothing
 
   if model.debug
-    est_psi = fill(NaN, model.soil.n_layers, n_days)
+    est_psi = fill(NaN, model.soil.nlayer, n_days)
     if !climatology
       @assert length(transpiration) == n_days
     end

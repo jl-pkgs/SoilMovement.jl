@@ -1,4 +1,4 @@
-module SimSoil
+module SoilSim
 
 using Parameters
 using LinearAlgebra

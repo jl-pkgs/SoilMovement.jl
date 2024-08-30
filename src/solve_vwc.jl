@@ -221,7 +221,7 @@ function solve_vwc(profile::SoilProfile, influx, vwc, temp_k, dt, transpiration=
       b = dqout_dliq[z] - (self._thickness_mm[z] / dt)
       c = dqout_dliq1[z]
       lhs[z, 1:2] = [b, c]
-    elseif z < self.n_layers
+    elseif z < self.nlayer
       a = -dqout0_dliq0[z]
       b = dqout_dliq[z] - dqout0_dliq[z] - (self._thickness_mm[z] / dt)
       c = dqout_dliq1[z]

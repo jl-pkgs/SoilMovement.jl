@@ -1,4 +1,4 @@
-name = "SimSoil"
+name = "SoilSim"
 uuid = "fb7be2d1-d6d4-4f88-9afd-de3e5fbdfdf4"
 authors = ["Dongdong Kong <kongdd@users.noreply.github.com>"]
 version = "0.1.0"
